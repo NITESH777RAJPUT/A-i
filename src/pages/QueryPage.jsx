@@ -53,7 +53,7 @@ const QueryPage = ({ token }) => {
     formData.append('file', file);
 
     try {
-      const res = await axios.post('/api/upload', formData, {
+      const res = await axios.post('https://ai-ja3l.onrender.com/api/upload', formData, {
         headers: {
           Authorization: `Bearer ${token}`
           // no need to set Content-Type for FormData manually
@@ -72,7 +72,7 @@ const QueryPage = ({ token }) => {
     }
     addMessage('status', `⏳ Fetching from URL...`);
     try {
-      const res = await axios.post('/api/upload/url', { pdfUrl }, {
+      const res = await axios.post('https://ai-ja3l.onrender.com/api/upload/url', { pdfUrl }, {
         headers: { Authorization: `Bearer ${token}` },
       });
       addMessage('status', `✅ ${res.data.message}`);
@@ -89,7 +89,7 @@ const QueryPage = ({ token }) => {
     setIsLoading(true); // Set loading to true when query is sent
 
     try {
-      const res = await axios.post('/api/query', { query }, {
+      const res = await axios.post('https://ai-ja3l.onrender.com/api/query', { query }, {
         headers: { Authorization: `Bearer ${token}` },
       });
       addMessage('bot', res.data, 'json');
