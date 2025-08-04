@@ -26,21 +26,28 @@ const HistoryIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
+// --- NEW ICONS FOR MOBILE UI ---
+const MenuIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+);
+const CloseIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+);
+
 
 const QueryPage = ({ token }) => {
   const [messages, setMessages] = useState([]);
   const [query, setQuery] = useState('');
   const [pdfUrl, setPdfUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarOpen, setSidebarOpen] = useState(false); // State for mobile sidebar
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
 
-  // Auto-scroll to the latest message
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
   
-  // Add a message to the chat history
   const addMessage = (sender, text, type = 'text') => {
     setMessages(prev => [...prev, { sender, text, type, timestamp: new Date() }]);
   };
@@ -48,6 +55,7 @@ const QueryPage = ({ token }) => {
   const handleFileUpload = async (file) => {
     if (!file) return;
     addMessage('status', `⏳ Uploading "${file.name}"...`);
+    setSidebarOpen(false); // Close sidebar on mobile after action
 
     const formData = new FormData();
     formData.append('file', file);
@@ -56,7 +64,6 @@ const QueryPage = ({ token }) => {
       const res = await axios.post('https://ai-ja3l.onrender.com/api/upload', formData, {
         headers: {
           Authorization: `Bearer ${token}`
-          // no need to set Content-Type for FormData manually
         },
       });
       addMessage('status', `✅ ${res.data.message}`);
@@ -71,6 +78,7 @@ const QueryPage = ({ token }) => {
       return addMessage('status', '❌ Please enter a valid .pdf, .docx, or .eml URL');
     }
     addMessage('status', `⏳ Fetching from URL...`);
+    setSidebarOpen(false); // Close sidebar on mobile after action
     try {
       const res = await axios.post('https://ai-ja3l.onrender.com/api/upload/url', { pdfUrl }, {
         headers: { Authorization: `Bearer ${token}` },
@@ -86,7 +94,7 @@ const QueryPage = ({ token }) => {
     if (!query.trim()) return;
     addMessage('user', query);
     setQuery('');
-    setIsLoading(true); // Set loading to true when query is sent
+    setIsLoading(true);
 
     try {
       const res = await axios.post('https://ai-ja3l.onrender.com/api/query', { query }, {
@@ -97,7 +105,7 @@ const QueryPage = ({ token }) => {
       const errorMsg = err.response?.data?.error || 'Query failed';
       addMessage('bot', { error: '❌ Query Failed', details: errorMsg }, 'json');
     } finally {
-      setIsLoading(false); // Set loading to false when response is received (or error occurs)
+      setIsLoading(false);
     }
   };
 
@@ -113,17 +121,37 @@ const QueryPage = ({ token }) => {
     URL.revokeObjectURL(url);
   };
 
-  // Load a previous chat session based on timestamp
   const loadSession = (timestamp) => {
     const sessionMessages = messages.filter(msg => msg.timestamp.toISOString() === timestamp.toISOString());
     setMessages(sessionMessages);
+    setSidebarOpen(false); // Close sidebar on mobile after loading session
   };
 
   return (
-    <div className="flex h-screen w-screen bg-white dark:bg-gray-800 transition-colors duration-300">
-      {/* Sidebar for Upload/URL and History */}
-      <div className="w-1/4 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 p-6 flex flex-col space-y-6">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Document Input</h3>
+    <div className="relative flex h-screen w-screen overflow-hidden bg-white dark:bg-gray-800 transition-colors duration-300">
+      
+      {/* Overlay for mobile */}
+      {isSidebarOpen && (
+          <div 
+              onClick={() => setSidebarOpen(false)} 
+              className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+              aria-hidden="true"
+          ></div>
+      )}
+
+      {/* Sidebar with responsive visibility */}
+      <div className={`
+        fixed top-0 left-0 h-full w-4/5 max-w-sm z-30 transform transition-transform duration-300 ease-in-out 
+        bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 p-6 flex flex-col space-y-6 overflow-y-auto
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:relative lg:translate-x-0 lg:w-1/4 lg:max-w-none lg:z-auto
+      `}>
+        <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Document Input</h3>
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white">
+                <CloseIcon />
+            </button>
+        </div>
         
         {/* File Upload */}
         <div className="flex flex-col items-center space-y-3 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
@@ -193,20 +221,23 @@ const QueryPage = ({ token }) => {
           </div>
         </div>
         
-        {/* Placeholder for uploaded documents list or other sidebar elements */}
         <div className="flex-grow"></div> 
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex flex-col flex-grow">
+      <div className="flex flex-col flex-grow w-full lg:w-auto">
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-700 text-white shadow-md flex items-center justify-between">
-          <h2 className="text-2xl font-bold">CogniDoc AI Assistant</h2>
-          {/* Potentially add a logo or user avatar here */}
+           <div className="flex items-center">
+             <button onClick={() => setSidebarOpen(true)} className="mr-4 text-white lg:hidden">
+                <MenuIcon />
+             </button>
+             <h2 className="text-xl md:text-2xl font-bold">CogniDoc AI Assistant</h2>
+           </div>
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-grow p-6 overflow-y-auto bg-gray-100 dark:bg-gray-900 custom-scrollbar">
+        <div className="flex-grow p-4 md:p-6 overflow-y-auto bg-gray-100 dark:bg-gray-900 custom-scrollbar">
           <div className="space-y-6">
             {messages.map((msg, index) => (
               <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} items-start`}>
@@ -216,8 +247,7 @@ const QueryPage = ({ token }) => {
                     <span className="text-sm text-gray-600 dark:text-gray-300 bg-yellow-100 dark:bg-yellow-800 rounded-full px-4 py-2 shadow-sm italic">{msg.text}</span>
                   </div>
                 ) : (
-                  // Changed from max-w-2xl to max-w-3xl
-                  <div className={`max-w-3xl p-4 rounded-xl shadow-md transform transition-all duration-300 ease-out 
+                  <div className={`max-w-md md:max-w-2xl lg:max-w-3xl p-4 rounded-xl shadow-md transform transition-all duration-300 ease-out 
                     ${msg.sender === 'user' 
                       ? 'bg-blue-500 text-white rounded-br-none animate-slide-in-right' 
                       : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-bl-none border border-gray-200 dark:border-gray-600 animate-slide-in-left'
@@ -230,7 +260,6 @@ const QueryPage = ({ token }) => {
                             : JSON.stringify(msg.text, null, 2)
                           }
                         </pre>
-
                         <button 
                           onClick={() => downloadJson(msg.text)} 
                           className="mt-3 flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm transition-colors duration-200"
@@ -246,7 +275,6 @@ const QueryPage = ({ token }) => {
                 {msg.sender === 'user' && <UserIcon />}
               </div>
             ))}
-            {/* Thinking indicator */}
             {isLoading && (
               <div className="flex justify-start items-start animate-pulse">
                 <BotIcon />
@@ -265,16 +293,16 @@ const QueryPage = ({ token }) => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleQuerySubmit()}
-            placeholder="Ask your query about the document..."
+            onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleQuerySubmit()}
+            placeholder="Ask your query..."
             className="flex-grow border border-gray-300 dark:border-gray-600 px-5 py-2.5 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-base shadow-sm transition duration-150 ease-in-out bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            disabled={isLoading} // Disable input while loading
+            disabled={isLoading}
           />
           <button 
             onClick={handleQuerySubmit} 
-            className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transform transition-transform duration-200 hover:scale-105"
+            className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transform transition-transform duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Send Query"
-            disabled={isLoading} // Disable button while loading
+            disabled={isLoading}
           >
             <SendIcon />
           </button>
