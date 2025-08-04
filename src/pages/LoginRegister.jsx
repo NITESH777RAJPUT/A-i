@@ -36,7 +36,7 @@ const LoginRegister = ({ onLogin }) => {
     e.preventDefault();
     if (!email || !password) return alert('Please enter email and password.');
     try {
-      const res = await axios.post(`/api/auth/${authMode}`, { email, password });
+      const res = await axios.post(`https://ai-ja3l.onrender.com/api/auth/${authMode}`, { email, password });
       if (res.data.token) {
         onLogin(res.data.token);
         navigate('/chat');
