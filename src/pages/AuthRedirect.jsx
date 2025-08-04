@@ -1,6 +1,6 @@
 // ✅ frontend/src/pages/LoginRegister.jsx (Google handler only)
 const handleGoogleLogin = () => {
-  const redirectUri = encodeURIComponent('http://localhost:5173');
+  const redirectUri = encodeURIComponent('https://a-i-kappa.vercel.app');
   window.location.href = `https://ai-ja3l.onrender.com/api/auth/google?redirect_uri=${redirectUri}`;
 };
 
