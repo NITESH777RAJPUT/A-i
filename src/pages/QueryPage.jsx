@@ -128,7 +128,8 @@ const QueryPage = ({ token }) => {
   };
 
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-white dark:bg-gray-800 transition-colors duration-300">
+    // BEFORE
+<div className="relative flex h-screen w-screen overflow-hidden bg-white dark:bg-gray-800 transition-colors duration-300">
       
       {/* Overlay for mobile */}
       {isSidebarOpen && (
