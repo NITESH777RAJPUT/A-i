@@ -1,14 +1,15 @@
 // src/App.jsx
 import React, { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import Home from './pages/Home';
 import LoginRegister from './pages/LoginRegister';
 import QueryPage from './pages/QueryPage';
-import AuthRedirect from './pages/AuthRedirect'; // ✅ Import
+import AuthRedirect from './pages/AuthRedirect';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const navigate = useNavigate(); // ✅ for redirection after login/register
 
   useEffect(() => {
     const root = document.documentElement;
@@ -19,11 +20,13 @@ function App() {
   const handleLogin = (jwtToken) => {
     localStorage.setItem('token', jwtToken);
     setToken(jwtToken);
+    navigate('/chat'); // ✅ redirect after login/register
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken(null);
+    navigate('/'); // Optional: redirect to home on logout
   };
 
   const toggleTheme = () => {
@@ -49,14 +52,37 @@ function App() {
       )}
 
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<LoginRegister onLogin={handleLogin} />} />
-        <Route path="/auth-redirect" element={<AuthRedirect onLogin={handleLogin} />} /> {/* ✅ Added */}
-        {token ? (
-          <Route path="/chat" element={<QueryPage token={token} onLogout={handleLogout} />} />
-        ) : (
-          <Route path="/chat" element={<LoginRegister onLogin={handleLogin} />} />
-        )}
+        <Route
+          path="/"
+          element={
+            token ? (
+              <QueryPage token={token} onLogout={handleLogout} />
+            ) : (
+              <Home />
+            )
+          }
+        />
+
+        <Route
+          path="/login"
+          element={<LoginRegister onLogin={handleLogin} />}
+        />
+
+        <Route
+          path="/auth-redirect"
+          element={<AuthRedirect onLogin={handleLogin} />}
+        />
+
+        <Route
+          path="/chat"
+          element={
+            token ? (
+              <QueryPage token={token} onLogout={handleLogout} />
+            ) : (
+              <LoginRegister onLogin={handleLogin} />
+            )
+          }
+        />
       </Routes>
     </div>
   );

@@ -26,36 +26,58 @@ const HistoryIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
-// --- NEW ICONS FOR MOBILE UI ---
-const MenuIcon = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
-);
-const CloseIcon = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+const PlusIcon = () => (
+  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+  </svg>
 );
 
-
-const QueryPage = ({ token }) => {
+const QueryPage = ({ token, onLogout }) => {
   const [messages, setMessages] = useState([]);
   const [query, setQuery] = useState('');
   const [pdfUrl, setPdfUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSidebarOpen, setSidebarOpen] = useState(false); // State for mobile sidebar
+  const [chatSessions, setChatSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
 
+  // Auto-scroll to the latest message
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-  
+
+  // Fetch chat history on component mount
+  useEffect(() => {
+    fetchChatSessions();
+  }, [token]);
+
+  // Add a message to the chat history
   const addMessage = (sender, text, type = 'text') => {
     setMessages(prev => [...prev, { sender, text, type, timestamp: new Date() }]);
   };
-  
+
+  const fetchChatSessions = async () => {
+    try {
+      const res = await axios.get('https://ai-ja3l.onrender.com/api/history', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setChatSessions(res.data);
+    } catch (err) {
+      console.error('Failed to fetch chat sessions:', err);
+    }
+  };
+
+  // Function to start a new chat session
+  const startNewChat = () => {
+    setMessages([]);
+    setCurrentSessionId(null);
+    fetchChatSessions(); // Refresh sessions list
+  };
+
   const handleFileUpload = async (file) => {
     if (!file) return;
     addMessage('status', `⏳ Uploading "${file.name}"...`);
-    setSidebarOpen(false); // Close sidebar on mobile after action
 
     const formData = new FormData();
     formData.append('file', file);
@@ -68,8 +90,13 @@ const QueryPage = ({ token }) => {
       });
       addMessage('status', `✅ ${res.data.message}`);
     } catch (err) {
-      const msg = err?.response?.data?.error || '❌ Upload failed';
-      addMessage('status', msg);
+      const errorMsg = err?.response?.data?.error || 'Upload failed';
+      if (err.response?.status === 401 || /invalid token/i.test(errorMsg)) {
+        addMessage('status', '❌ Session expired. Please log in again.');
+        setTimeout(() => onLogout(), 2000);
+      } else {
+        addMessage('status', `❌ ${errorMsg}`);
+      }
     }
   };
 
@@ -78,7 +105,6 @@ const QueryPage = ({ token }) => {
       return addMessage('status', '❌ Please enter a valid .pdf, .docx, or .eml URL');
     }
     addMessage('status', `⏳ Fetching from URL...`);
-    setSidebarOpen(false); // Close sidebar on mobile after action
     try {
       const res = await axios.post('https://ai-ja3l.onrender.com/api/upload/url', { pdfUrl }, {
         headers: { Authorization: `Bearer ${token}` },
@@ -86,10 +112,16 @@ const QueryPage = ({ token }) => {
       addMessage('status', `✅ ${res.data.message}`);
       setPdfUrl('');
     } catch (err) {
-      addMessage('status', '❌ URL upload failed');
+      const errorMsg = err?.response?.data?.error || 'URL upload failed';
+      if (err.response?.status === 401 || /invalid token/i.test(errorMsg)) {
+        addMessage('status', '❌ Session expired. Please log in again.');
+        setTimeout(() => onLogout(), 2000);
+      } else {
+        addMessage('status', `❌ ${errorMsg}`);
+      }
     }
   };
-  
+
   const handleQuerySubmit = async () => {
     if (!query.trim()) return;
     addMessage('user', query);
@@ -97,13 +129,28 @@ const QueryPage = ({ token }) => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('https://ai-ja3l.onrender.com/api/query', { query }, {
+      const res = await axios.post('https://ai-ja3l.onrender.com/api/query', { query, sessionId: currentSessionId }, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      addMessage('bot', res.data, 'json');
+
+      const newBotMessage = {
+        sender: 'bot',
+        text: res.data,
+        type: 'json',
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, newBotMessage]);
+      setCurrentSessionId(res.data.sessionId);
+      fetchChatSessions(); // Refresh sessions list
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'Query failed';
-      addMessage('bot', { error: '❌ Query Failed', details: errorMsg }, 'json');
+      if (err.response?.status === 401 || /invalid token/i.test(errorMsg)) {
+        addMessage('status', '❌ Session expired. Please log in again.');
+        setTimeout(() => onLogout(), 2000);
+      } else {
+        addMessage('bot', { error: '❌ Query Failed', details: errorMsg }, 'json');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -121,39 +168,26 @@ const QueryPage = ({ token }) => {
     URL.revokeObjectURL(url);
   };
 
-  const loadSession = (timestamp) => {
-    const sessionMessages = messages.filter(msg => msg.timestamp.toISOString() === timestamp.toISOString());
-    setMessages(sessionMessages);
-    setSidebarOpen(false); // Close sidebar on mobile after loading session
+  // Load a previous chat session based on sessionId
+  const loadSession = async (sessionId) => {
+    try {
+      const res = await axios.get(`https://ai-ja3l.onrender.com/api/history/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessages(res.data.messages);
+      setCurrentSessionId(sessionId);
+    } catch (err) {
+      console.error('Failed to load chat session:', err);
+      addMessage('status', '❌ Failed to load chat session.');
+    }
   };
 
   return (
-    // BEFORE
-<div className="relative flex h-screen w-screen overflow-hidden bg-white dark:bg-gray-800 transition-colors duration-300">
-      
-      {/* Overlay for mobile */}
-      {isSidebarOpen && (
-          <div 
-              onClick={() => setSidebarOpen(false)} 
-              className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-              aria-hidden="true"
-          ></div>
-      )}
+    <div className="flex h-screen w-screen bg-white dark:bg-gray-800 transition-colors duration-300">
+      {/* Sidebar for Upload/URL and History */}
+      <div className="w-1/4 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 p-6 flex flex-col space-y-6">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Document Input</h3>
 
-      {/* Sidebar with responsive visibility */}
-      <div className={`
-        fixed top-0 left-0 h-full w-4/5 max-w-sm z-30 transform transition-transform duration-300 ease-in-out 
-        bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 p-6 flex flex-col space-y-6 overflow-y-auto
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:relative lg:translate-x-0 lg:w-1/4 lg:max-w-none lg:z-auto
-      `}>
-        <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Document Input</h3>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white">
-                <CloseIcon />
-            </button>
-        </div>
-        
         {/* File Upload */}
         <div className="flex flex-col items-center space-y-3 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
           <input
@@ -163,8 +197,8 @@ const QueryPage = ({ token }) => {
             ref={fileInputRef}
             className="hidden"
           />
-          <button 
-            onClick={() => fileInputRef.current.click()} 
+          <button
+            onClick={() => fileInputRef.current.click()}
             className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors duration-200 transform hover:scale-105"
             title="Upload Document"
           >
@@ -185,60 +219,61 @@ const QueryPage = ({ token }) => {
             placeholder="e.g., https://example.com/doc.pdf"
             className="w-full border border-gray-300 dark:border-gray-600 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm transition duration-150 ease-in-out bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
-          <button 
-            onClick={handleUrlUpload} 
+          <button
+            onClick={handleUrlUpload}
             className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transform transition-transform duration-200 hover:scale-105"
           >
             Fetch URL
           </button>
         </div>
-        
+
+        {/* New Chat Button */}
+        <button
+          onClick={startNewChat}
+          className="w-full flex items-center justify-center px-4 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200 transform hover:scale-105"
+          title="Start a New Chat"
+        >
+          <PlusIcon /> <span className="ml-2">New Chat</span>
+        </button>
+
         {/* Chat History */}
         <div className="flex flex-col space-y-3 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2 flex items-center">
             <HistoryIcon /> Chat History
           </h3>
           <div className="overflow-y-auto max-h-96 custom-scrollbar">
-            {messages.length === 0 ? (
+            {chatSessions.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">No chat history yet.</p>
             ) : (
-              Array.from(new Set(messages.map(msg => msg.timestamp.toISOString())))
-                .map(timestamp => {
-                  const sessionMessages = messages.filter(msg => msg.timestamp.toISOString() === timestamp);
-                  return { timestamp: new Date(timestamp), messages: sessionMessages };
-                })
-                .map((session, index) => (
-                  <button
-                    key={index}
-                    onClick={() => loadSession(session.timestamp)}
-                    className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200"
-                  >
-                    <span className="text-gray-700 dark:text-gray-200">
-                      Chat from {session.timestamp.toLocaleString()}
-                    </span>
-                  </button>
-                ))
+              chatSessions.map((session, index) => (
+                <button
+                  key={index}
+                  onClick={() => loadSession(session.sessionId)}
+                  className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors duration-200 ${
+                    session.sessionId === currentSessionId
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-semibold'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  <span className="text-gray-700 dark:text-gray-200">
+                    Chat from {new Date(session.createdAt).toLocaleString()}
+                  </span>
+                </button>
+              ))
             )}
           </div>
         </div>
-        
-        <div className="flex-grow"></div> 
+
+        <div className="flex-grow"></div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex flex-col flex-grow w-full lg:w-auto">
-        {/* Header */}
+      <div className="flex flex-col flex-grow">
         <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-700 text-white shadow-md flex items-center justify-between">
-           <div className="flex items-center">
-             <button onClick={() => setSidebarOpen(true)} className="mr-4 text-white lg:hidden">
-                <MenuIcon />
-             </button>
-             <h2 className="text-xl md:text-2xl font-bold">CogniDoc AI Assistant</h2>
-           </div>
+          <h2 className="text-2xl font-bold">CogniDoc AI Assistant</h2>
         </div>
 
-        {/* Chat Messages */}
-        <div className="flex-grow p-4 md:p-6 overflow-y-auto bg-gray-100 dark:bg-gray-900 custom-scrollbar">
+        <div className="flex-grow p-6 overflow-y-auto bg-gray-100 dark:bg-gray-900 custom-scrollbar">
           <div className="space-y-6">
             {messages.map((msg, index) => (
               <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} items-start`}>
@@ -248,9 +283,9 @@ const QueryPage = ({ token }) => {
                     <span className="text-sm text-gray-600 dark:text-gray-300 bg-yellow-100 dark:bg-yellow-800 rounded-full px-4 py-2 shadow-sm italic">{msg.text}</span>
                   </div>
                 ) : (
-                  <div className={`max-w-md md:max-w-2xl lg:max-w-3xl p-4 rounded-xl shadow-md transform transition-all duration-300 ease-out 
-                    ${msg.sender === 'user' 
-                      ? 'bg-blue-500 text-white rounded-br-none animate-slide-in-right' 
+                  <div className={`max-w-3xl p-4 rounded-xl shadow-md transform transition-all duration-300 ease-out
+                    ${msg.sender === 'user'
+                      ? 'bg-blue-500 text-white rounded-br-none animate-slide-in-right'
                       : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-bl-none border border-gray-200 dark:border-gray-600 animate-slide-in-left'
                     }`}>
                     {msg.type === 'json' ? (
@@ -261,8 +296,9 @@ const QueryPage = ({ token }) => {
                             : JSON.stringify(msg.text, null, 2)
                           }
                         </pre>
-                        <button 
-                          onClick={() => downloadJson(msg.text)} 
+
+                        <button
+                          onClick={() => downloadJson(msg.text)}
                           className="mt-3 flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm transition-colors duration-200"
                         >
                           <DownloadIcon /> Download JSON
@@ -294,14 +330,14 @@ const QueryPage = ({ token }) => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleQuerySubmit()}
-            placeholder="Ask your query..."
+            onKeyDown={(e) => e.key === 'Enter' && handleQuerySubmit()}
+            placeholder="Ask your query about the document..."
             className="flex-grow border border-gray-300 dark:border-gray-600 px-5 py-2.5 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-base shadow-sm transition duration-150 ease-in-out bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             disabled={isLoading}
           />
-          <button 
-            onClick={handleQuerySubmit} 
-            className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transform transition-transform duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+          <button
+            onClick={handleQuerySubmit}
+            className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transform transition-transform duration-200 hover:scale-105"
             title="Send Query"
             disabled={isLoading}
           >
