@@ -50,7 +50,7 @@ const LoginRegister = ({ onLogin }) => {
 
   // src/pages/LoginRegister.jsx
 const handleGoogleLogin = () => {
-  const redirectUri = encodeURIComponent('https://a-i-kappa.vercel.app/auth-redirect'); // ✅ Fixed here
+  const redirectUri = encodeURIComponent('https://a-i-mki5.vercel.app/auth-redirect'); // ✅ Fixed here
   window.location.href = `https://ai-ja3l.onrender.com/api/auth/google?redirect_uri=${redirectUri}`;
 };
 
